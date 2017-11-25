@@ -1,44 +1,50 @@
 {{ define "upstream_server" -}}
-  {{ if (index .Container.Config.Labels "service.hostname") -}}
-    server {{ (index .Container.Config.Labels "service.hostname") }}:{{ .Port.HostPort }}{{ if (ne .Status "running") }} down{{end}};
+  {{- $labels   := .Container.Config.Labels -}}
+  {{- $hostname := index $labels "service.web.backend.hostname" -}}
+  {{- $port     := coalesce (index $labels "service.web.backend.port") .Port -}}
+
+  {{- if $hostname -}}
+    server {{ $hostname }}:{{ $port }}{{ if (ne .Status "running") }} down{{end}};
   {{- else -}}
-    server {{ .NetworkSettings.IPAddress }}:{{ .Port.HostPort }}{{ if (ne .Status "running") }} down{{end}};
+    {{- $networkName := index $labels "service.web.docker.network" -}}
+    {{- if $networkName -}}
+      {{ $network := index .NetworkSettings.Networks $networkName }}
+      {{ if $network -}}
+        server {{ $network.IPAddress }}:{{ $port }}{{ if (ne .Status "running") }} down{{end}};
+      {{- end -}}
+    {{- else -}}
+      server {{ .NetworkSettings.IPAddress }}:{{ $port }}{{ if (ne .Status "running") }} down{{end}};
+    {{- end -}}
   {{- end }}
 {{- end }}
 
 {{ range $i, $c := .allcontainers -}}
-  {{ if (and (eq (index $c.Config.Labels "service.public") "true") (and $c.NetworkSettings.IPAddress (gt (len $c.NetworkSettings.Ports) 0))) -}}
-  upstream {{ index $c.Config.Labels "service.name" }} {
-    {{ range $k, $port := $c.NetworkSettings.Ports -}}
-      {{- if $port -}}
-        {{ $hostPort := $port | first }}
-        {{ if $hostPort -}}
-          {{ $status := coalesce $c.State.Status "down" }}
-          {{ template "upstream_server" (dict "Container" $c "Port" $hostPort "NetworkSettings" $c.NetworkSettings "Status" $status) }}
-        {{- end }}
-      {{- end -}}
-    {{- end }}
+
+  {{- $labels       := $c.Config.Labels -}}
+  {{- $service_name := coalesce (index $labels "service.name") (index $labels "com.docker.swarm.service.name") -}}
+
+  {{- if (eq (index $labels "service.web.enable") "true") -}}
+  upstream {{ $service_name }} {
+    {{ $port   := $c.NetworkSettings | network_first_hostport }}
+    {{ $status := coalesce $c.State.Status "down" }}
+    {{ template "upstream_server" (dict "Container" $c "Port" $port "NetworkSettings" $c.NetworkSettings "Status" $status) }}
   }
 
   {{ if false }}
   server {
     listen 80;
-    {{ if (index $c.Config.Labels "service.web.frontend.hostname") -}}
-    server_name: {{ index $c.Config.Labels "service.web.frontend.hostname" }};
-    {{- end }}
+    server_name: {{ coalesce (index $labels "service.web.frontend.hostname") (printf "%s.localhost" $service_name) }};
     return: 301 https://$host$request_uri
   }
   {{ end }}
 
   server {
-    listen: {{ indexor $c.Config.Labels "service.web.port" "80" }};
-    {{ if (index $c.Config.Labels "service.web.frontend.hostname") -}}
-    server_name: {{ index $c.Config.Labels "service.web.frontend.hostname" }};
-    {{- end }}
+    listen: {{ indexor $labels "service.web.frontend.port" "80" }};
+    server_name: {{ coalesce (index $labels "service.web.frontend.hostname") (printf "%s.localhost" $service_name) }};
 
     localtion / {
       proxy_http_version 1.1;
-      proxy_pass "http://{{ index $c.Config.Labels "service.name" }}";
+      proxy_pass "http://{{ $service_name }}";
       proxy_set_header Connection $connection_upgrade;
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Host $host;
@@ -52,5 +58,8 @@
       root: /var/www/html/;
     }
   }
+
+  {{ $c | jsonbeauty }}
+
   {{- end }}
 {{- end }}

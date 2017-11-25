@@ -111,7 +111,9 @@ var tplFuncs = template.FuncMap{
 	"coalesce": func(input ...interface{}) interface{} {
 		for _, v := range input {
 			if v != nil {
-				return v
+				if s, ok := v.(string); !ok || s != "" {
+					return v
+				}
 			}
 		}
 		return nil
@@ -130,5 +132,13 @@ var tplFuncs = template.FuncMap{
 			dict[key] = values[i+1]
 		}
 		return dict, nil
+	},
+	"network_first_hostport": func(nets types.NetworkSettings) interface{} {
+		for _, binds := range nets.Ports {
+			if len(binds) > 0 {
+				return binds[0].HostPort
+			}
+		}
+		return nil
 	},
 }

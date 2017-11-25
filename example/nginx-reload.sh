@@ -18,7 +18,7 @@ if [ -f "$1.checksum" ]; then
   prevSum=`cat $1.checksum`
 
   if [ $sum != $prevSum ]; then
-    doreload
+    doreload $1
   else
     echo "No any changes: $1"
   fi
