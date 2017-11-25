@@ -1,0 +1,23 @@
+{
+  "docker": {
+    "host": "unix:///var/run/docker.sock"
+  },
+
+  "routes": [
+    {
+      "actions": ["start", "unpause", "refresh", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "source": "{{basedir}}/nginx.tpl",
+      "target": "{{basedir}}/nginx.conf"
+    },
+    {
+      "name_pattern": "",
+      "actions": ["start", "unpause", "refresh", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "cmd": "{{ .config.BaseDir }}/nginx-reload.sh {{ .config.BaseDir }}/nginx.conf"
+    },
+    {
+      "name_pattern": "",
+      "actions": ["start", "unpause", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "cmd": "echo \"{{ .action }}: {{range .containers}}{{ .ID }},{{end}}\""
+    }
+  ]
+}
