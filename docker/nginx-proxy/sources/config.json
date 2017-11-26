@@ -1,0 +1,27 @@
+{
+  "docker": {
+    "host": "unix:///var/run/docker.sock"
+  },
+
+  "routes": [
+    {
+      "scope": "swarm",
+      "actions": ["update", "start", "unpause", "refresh", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "source": "{{ .config.BaseDir }}/service.tpl",
+      "target": "{{ .config.BaseDir }}/services.conf"
+    }],"w":[
+    {
+      "each": true,
+      "scope": "swarm",
+      "actions": ["update", "start", "unpause", "refresh", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "condition": "{{ if (and (eq (index .current.Config.Labels \"service.web.enable\") \"true\") (index .current.Config.Labels \"service.web.frontend.auth.basic\")) }}true{{ end }}",
+      "cmd": "echo '{{ index .current.Config.Labels \"service.web.frontend.auth.basic\" }}' > /etc/nginx/vhost.d/.{{ coalesce (index .current.Config.Labels \"service.name\") (index .current.Config.Labels \"com.docker.swarm.service.name\") }}.htpasswd"
+    },
+    {
+      "name_pattern": "",
+      "scope": "swarm",
+      "actions": ["update", "start", "unpause", "refresh", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "cmd": "{{ .config.BaseDir }}/nginx-reload.sh /etc/nginx/vhost.d/services.conf"
+    }
+  ]
+}

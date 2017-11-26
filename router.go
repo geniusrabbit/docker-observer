@@ -3,24 +3,25 @@
 // @author Dmitry Ponomarev <demdxx@gmail.com> 2017
 //
 
-package main
+package observer
 
 import (
 	"context"
 	"sync"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/swarm"
 )
 
 // Router basic interface
 type Router interface {
-	Add(pattern string, actions []string, route Route) error
-	Routes(action string, container *types.ContainerJSON) []Route
+	Add(pattern, scope string, actions []string, route Route) error
+	Routes(action, scope string, obj interface{}) []Route
 }
 
 // Route interface
 type Route interface {
-	Exec(ctx context.Context, action string, containers, allContainers []types.ContainerJSON) error
+	Exec(ctx context.Context, msg *ExecuteMessage) error
 	Validate() error
 }
 
@@ -40,8 +41,8 @@ func NewRouter() Router {
 }
 
 // Add route executer
-func (r *router) Add(pattern string, actions []string, route Route) error {
-	fl, err := NewFilter(actions, pattern)
+func (r *router) Add(pattern, scope string, actions []string, route Route) error {
+	fl, err := NewFilter(actions, scope, pattern)
 	r.routes = append(r.routes, routeItem{
 		filter: fl,
 		route:  route,
@@ -50,12 +51,20 @@ func (r *router) Add(pattern string, actions []string, route Route) error {
 }
 
 // Routes for container
-func (r *router) Routes(action string, container *types.ContainerJSON) (list []Route) {
+func (r *router) Routes(action, scope string, obj interface{}) (list []Route) {
 	r.mx.Lock()
 	defer r.mx.Unlock()
 
 	for _, rt := range r.routes {
-		if rt.filter.Test(action, container.Name) {
+		var name string
+		switch o := obj.(type) {
+		case types.ContainerJSON:
+			name = o.Name
+		case swarm.Service:
+			name = o.Spec.Name
+		}
+
+		if rt.filter.Test(action, scope, name) {
 			list = append(list, rt.route)
 		}
 	}

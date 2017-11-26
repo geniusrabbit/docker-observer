@@ -9,16 +9,16 @@ import (
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
-	"strings"
 
+	observer "github.com/geniusrabbit/docker-observer"
 	log "github.com/sirupsen/logrus"
 )
 
 func init() {
-	fatalError(Config.Load())
+	fatalError(observer.Config.Load())
 
 	log.SetLevel(log.InfoLevel)
-	if Config.Debug {
+	if observer.Config.Debug {
 		log.SetLevel(log.DebugLevel)
 		go func() { log.Println(http.ListenAndServe(":6060", nil)) }()
 	}
@@ -27,8 +27,8 @@ func init() {
 		TimestampFormat: "2006-01-02 15:04:05 MST",
 	})
 
-	if Config.Debug {
-		fmt.Println(Config.String())
+	if observer.Config.Debug {
+		fmt.Println(observer.Config.String())
 	}
 }
 
@@ -38,34 +38,40 @@ func main() {
 	fatalError(observer.Run())
 }
 
-func newObserver() (Observer, error) {
+func newObserver() (observer.Observer, error) {
 	var (
-		router   = NewRouter()
-		executor = NewExecuter(router)
+		router   = observer.NewRouter()
+		executor = observer.NewExecuter(router)
 	)
 
-	for _, rt := range Config.Routes {
-		var route Route
+	for _, rt := range observer.Config.Routes {
+		var route observer.Route
 		if rt.Cmd != "" {
 			if rt.Source != "" || rt.Target != "" {
 				fatalError(fmt.Errorf("Router can't combine command and template"))
 			}
-			route = &CmdRoute{Cmd: rt.Cmd}
+			route = &observer.CmdRoute{
+				Each:      rt.Each,
+				Condition: rt.Condition,
+				Cmd:       rt.Cmd,
+			}
 		} else {
-			route = &TplRoute{
-				Source: strings.Replace(rt.Source, "{{basedir}}", Config.BaseDir, -1),
-				Target: strings.Replace(rt.Target, "{{basedir}}", Config.BaseDir, -1),
+			route = &observer.TplRoute{
+				Each:      rt.Each,
+				Condition: rt.Condition,
+				Source:    rt.Source,
+				Target:    rt.Target,
 			}
 		}
 
 		fatalError(route.Validate())
-		router.Add(rt.NamePattern, rt.Actions, route)
+		router.Add(rt.NamePattern, rt.Scope, rt.Actions, route)
 	}
 
-	return New(
+	return observer.New(
 		executor,
-		Config.Docker.Host,
-		Config.Docker.Version,
+		observer.Config.Docker.Host,
+		observer.Config.Docker.Version,
 		nil, nil)
 }
 

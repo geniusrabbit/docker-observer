@@ -3,7 +3,7 @@
 // @author Dmitry Ponomarev <demdxx@gmail.com> 2017
 //
 
-package main
+package observer
 
 import (
 	"bytes"
@@ -12,11 +12,13 @@ import (
 	"errors"
 	"io/ioutil"
 	"reflect"
+	"strconv"
 	"strings"
 	"text/template"
 
 	"github.com/demdxx/gocast"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/swarm"
 )
 
 // TplRouter errors
@@ -27,20 +29,47 @@ var (
 
 // TplRoute processor
 type TplRoute struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
+	Each         bool   `json:"each"` // Do process containers one by one
+	Condition    string `json:"condition"`
+	Source       string `json:"source"`
+	Target       string `json:"target"`
+	conditionTpl *template.Template
+	sourceTpl    *template.Template
+	targetTpl    *template.Template
 }
 
 // Exec route object
-func (r *TplRoute) Exec(ctx context.Context, action string, containers, allContainers []types.ContainerJSON) error {
-	data, err := r.prepareTmp(map[string]interface{}{
-		"action":        action,
-		"containers":    containers,
-		"allcontainers": allContainers,
-	})
+func (r *TplRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
+	var (
+		err     error
+		data    []byte
+		dataCtx = map[string]interface{}{
+			"message":       msg,
+			"action":        msg.Action,
+			"items":         msg.ListBase(),
+			"allitems":      msg.AllListBase(),
+			"containers":    msg.Containers,
+			"allcontainers": msg.AllContainers,
+			"services":      msg.Services,
+			"allservices":   msg.AllServices,
+			"config":        &Config,
+		}
+	)
 
-	if err == nil {
-		err = ioutil.WriteFile(r.Target, data, 0666)
+	if r.Each {
+		for _, it := range msg.ListBase() {
+			switch it.(type) {
+			case types.ContainerJSON:
+				dataCtx["container"] = it
+			case swarm.Service:
+				dataCtx["service"] = it
+			}
+			if data, err = r.prepareTmp(dataCtx); err == nil {
+				err = ioutil.WriteFile(r.target(dataCtx), data, 0666)
+			}
+		}
+	} else if data, err = r.prepareTmp(dataCtx); err == nil {
+		err = ioutil.WriteFile(r.target(dataCtx), data, 0666)
 	}
 	return err
 }
@@ -63,7 +92,7 @@ func (r *TplRoute) prepareTmp(data interface{}) (_ []byte, err error) {
 		buf    bytes.Buffer
 	)
 
-	if fldata, err = ioutil.ReadFile(r.Source); err != nil {
+	if fldata, err = ioutil.ReadFile(r.source(data)); err != nil {
 		return nil, err
 	}
 
@@ -73,6 +102,48 @@ func (r *TplRoute) prepareTmp(data interface{}) (_ []byte, err error) {
 
 	err = tpl.Execute(&buf, data)
 	return buf.Bytes(), err
+}
+
+func (r *TplRoute) source(ctx interface{}) string {
+	if r.sourceTpl == nil {
+		r.sourceTpl, _ = template.New("src").Funcs(tplFuncs).Parse(r.Source)
+	}
+	if r.sourceTpl != nil {
+		var buf bytes.Buffer
+		r.sourceTpl.Execute(&buf, ctx)
+		return buf.String()
+	}
+	return r.Source
+}
+
+func (r *TplRoute) target(ctx interface{}) string {
+	if r.targetTpl == nil {
+		r.targetTpl, _ = template.New("trg").Funcs(tplFuncs).Parse(r.Target)
+	}
+	if r.targetTpl != nil {
+		var buf bytes.Buffer
+		r.targetTpl.Execute(&buf, ctx)
+		return buf.String()
+	}
+	return r.Target
+}
+
+func (r *TplRoute) condition(ctx interface{}) bool {
+	if r.Condition == "" {
+		return true
+	}
+
+	if r.conditionTpl == nil {
+		r.conditionTpl, _ = template.New("cond").Funcs(tplFuncs).Parse(r.Condition)
+	}
+
+	if r.conditionTpl != nil {
+		var buf bytes.Buffer
+		r.conditionTpl.Execute(&buf, ctx)
+		b, _ := strconv.ParseBool(buf.String())
+		return b
+	}
+	return false
 }
 
 var tplFuncs = template.FuncMap{
@@ -140,5 +211,12 @@ var tplFuncs = template.FuncMap{
 			}
 		}
 		return nil
+	},
+	"is_service": func(it interface{}) bool {
+		switch it.(type) {
+		case swarm.Service, *swarm.Service:
+			return true
+		}
+		return false
 	},
 }

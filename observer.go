@@ -3,7 +3,7 @@
 // @author Dmitry Ponomarev <demdxx@gmail.com> 2017
 //
 
-package main
+package observer
 
 import (
 	"context"
@@ -14,15 +14,10 @@ import (
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
 	log "github.com/sirupsen/logrus"
 )
-
-type executePair struct {
-	action        string
-	containers    []types.ContainerJSON
-	allContainers []types.ContainerJSON
-}
 
 // Observer description
 type Observer interface {
@@ -32,7 +27,7 @@ type Observer interface {
 
 // ContainerEventer processor
 type ContainerEventer interface {
-	Event(action string, containers, allContainers []types.ContainerJSON)
+	Event(msg *ExecuteMessage)
 	Error(err error)
 }
 
@@ -41,7 +36,7 @@ type baseObserver struct {
 	sync.Mutex
 	ContainerEventer
 	inProcess bool
-	script    []*executePair
+	script    []*ExecuteMessage
 	executer  *time.Ticker
 	ticker    *time.Ticker
 	docker    *client.Client
@@ -80,7 +75,8 @@ func (o *baseObserver) Run() error {
 	for {
 		select {
 		case msg := <-messages:
-			if msg.Type == events.ServiceEventType || msg.Type == events.ContainerEventType {
+			switch msg.Type {
+			case events.ContainerEventType:
 				containers, err := o.containerInspectList()
 
 				if err != nil {
@@ -89,23 +85,26 @@ func (o *baseObserver) Run() error {
 
 				for _, cnt := range containers {
 					if cnt.ID == msg.Actor.ID {
-						o.Lock()
-						var pair *executePair
-						for _, pr := range o.script {
-							if pr.action == msg.Action {
-								pair = pr
-							}
-						}
+						o.scriptActionPair(msg, func(pair *ExecuteMessage) {
+							pair.Containers = append(pair.Containers, cnt)
+							pair.AllContainers = containers
+						})
+						break
+					}
+				} // end for
+			case events.ServiceEventType:
+				services, err := o.serviceInspectList()
 
-						if pair == nil {
-							pair = &executePair{action: msg.Action}
-							o.script = append(o.script, pair)
-						}
+				if err != nil {
+					o.ContainerEventer.Error(err)
+				}
 
-						pair.containers = append(pair.containers, cnt)
-						pair.allContainers = containers
-						o.Unlock()
-
+				for _, srv := range services {
+					if srv.ID == msg.Actor.ID {
+						o.scriptActionPair(msg, func(pair *ExecuteMessage) {
+							pair.Services = append(pair.Services, srv)
+							pair.AllServices = services
+						})
 						break
 					}
 				} // end for
@@ -122,7 +121,7 @@ func (o *baseObserver) Run() error {
 				o.Unlock()
 
 				for _, pair := range script {
-					go o.ContainerEventer.Event(pair.action, pair.containers, pair.allContainers)
+					go o.ContainerEventer.Event(pair)
 				}
 			}
 		case <-o.ticker.C:
@@ -155,12 +154,31 @@ func (o *baseObserver) refreshAll() {
 	defer o.outOfProcess()
 
 	containers, err := o.containerInspectList()
-	if err != nil {
-		log.Errorf("Refresh services (container list): %v", err)
-		return
+	{
+		if err != nil {
+			log.Errorf("Refresh container list: %v", err)
+			return
+		}
+
+		o.ContainerEventer.Event(&ExecuteMessage{
+			Action:        "refresh",
+			AllContainers: containers,
+		})
 	}
 
-	o.ContainerEventer.Event("refresh", nil, containers)
+	services, err := o.serviceInspectList()
+	{
+		if err != nil {
+			log.Errorf("Refresh services list: %v", err)
+			return
+		}
+
+		o.ContainerEventer.Event(&ExecuteMessage{
+			Action:      "refresh",
+			Scope:       "swarm",
+			AllServices: services,
+		})
+	}
 }
 
 func (o *baseObserver) containerInspectList() (list []types.ContainerJSON, err error) {
@@ -178,6 +196,29 @@ func (o *baseObserver) containerInspectList() (list []types.ContainerJSON, err e
 	}
 
 	return
+}
+
+func (o *baseObserver) serviceInspectList() ([]swarm.Service, error) {
+	return o.docker.ServiceList(context.Background(), types.ServiceListOptions{})
+}
+
+func (o *baseObserver) scriptActionPair(msg events.Message, f func(pair *ExecuteMessage)) {
+	o.Lock()
+	var pair *ExecuteMessage
+	for _, pr := range o.script {
+		if pr.Action == msg.Action && pr.Scope == msg.Scope {
+			pair = pr
+		}
+	}
+
+	if pair == nil {
+		pair = &ExecuteMessage{Action: msg.Action, Scope: msg.Scope}
+		o.script = append(o.script, pair)
+	}
+
+	f(pair)
+
+	o.Unlock()
 }
 
 func (o *baseObserver) goInProcess() bool {

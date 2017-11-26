@@ -3,7 +3,7 @@
 // @author Dmitry Ponomarev <demdxx@gmail.com> 2017
 //
 
-package main
+package observer
 
 import (
 	"encoding/json"
@@ -17,7 +17,10 @@ type docker struct {
 
 type route struct {
 	NamePattern string   `json:"name_pattern" yaml:"name_pattern"`
+	Scope       string   `json:"scope" yaml:"scope"`
 	Actions     []string `json:"actions" yaml:"actions"`
+	Each        bool     `json:"each" yaml:"each"` // Process container one by one
+	Condition   string   `json:"condition" yaml:"condition"`
 	Cmd         string   `json:"cmd,omitempty" yaml:"cmd"`
 	Source      string   `json:"source,omitempty" yaml:"source"`
 	Target      string   `json:"target,omitempty" yaml:"target"`

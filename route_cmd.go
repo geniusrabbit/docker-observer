@@ -3,7 +3,7 @@
 // @author Dmitry Ponomarev <demdxx@gmail.com> 2017
 //
 
-package main
+package observer
 
 import (
 	"bytes"
@@ -13,9 +13,11 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strconv"
 	"text/template"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/swarm"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -26,26 +28,55 @@ var (
 
 // CmdRoute processor
 type CmdRoute struct {
-	Cmd string `json:"cmd"`
-	tpl *template.Template
+	Each         bool   `json:"each"` // Do process containers one by one
+	Condition    string `json:"condition"`
+	Cmd          string `json:"cmd"`
+	conditionTpl *template.Template
+	tpl          *template.Template
 }
 
 // Exec route object
-func (r *CmdRoute) Exec(ctx context.Context, action string, containers, allContainers []types.ContainerJSON) error {
+func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 	var (
-		data []byte
-		info = map[string]interface{}{
-			"action":        action,
-			"containers":    containers,
-			"allcontainers": allContainers,
+		err     error
+		buf     *bytes.Buffer
+		data    []byte
+		dataCtx = map[string]interface{}{
+			"message":       msg,
+			"action":        msg.Action,
+			"items":         msg.ListBase(),
+			"allitems":      msg.AllListBase(),
+			"containers":    msg.Containers,
+			"allcontainers": msg.AllContainers,
+			"services":      msg.Services,
+			"allservices":   msg.AllServices,
 			"config":        &Config,
 		}
-		cmd      = r.prepareCmd(info)
-		buf, err = toJSON(info)
 	)
 
-	if err == nil {
-		if data, err = r.exeCmd(ctx, buf, cmd); len(data) > 0 {
+	if r.Each {
+		for _, it := range msg.ListBase() {
+			switch it.(type) {
+			case types.ContainerJSON:
+				dataCtx["container"] = it
+			case swarm.Service:
+				dataCtx["service"] = it
+			}
+			if r.condition(dataCtx) {
+				if buf, err = toJSON(dataCtx); err != nil {
+					break
+				}
+				if data, err = r.exeCmd(ctx, buf, r.prepareCmd(dataCtx)); len(data) > 0 {
+					fmt.Println(string(data))
+				}
+				if err != nil {
+					break
+				}
+			}
+		}
+	} else if r.condition(dataCtx) {
+		buf, err = toJSON(dataCtx)
+		if data, err = r.exeCmd(ctx, buf, r.prepareCmd(dataCtx)); len(data) > 0 {
 			fmt.Println(string(data))
 		}
 	}
@@ -74,13 +105,32 @@ func (r *CmdRoute) exeCmd(ctx context.Context, data io.Reader, cmd string) (out 
 func (r *CmdRoute) prepareCmd(data interface{}) string {
 	if r.tpl == nil {
 		var err error
-		r.tpl, err = template.New("x").Parse(r.Cmd)
-		fmt.Println(err)
+		if r.tpl, err = template.New("cmd").Funcs(tplFuncs).Parse(r.Cmd); r.tpl == nil {
+			return "<error:" + err.Error() + ">"
+		}
 	}
 
 	var buf bytes.Buffer
 	r.tpl.Execute(&buf, data)
 	return buf.String()
+}
+
+func (r *CmdRoute) condition(ctx interface{}) bool {
+	if r.Condition == "" {
+		return true
+	}
+
+	if r.conditionTpl == nil {
+		r.conditionTpl, _ = template.New("cond").Funcs(tplFuncs).Parse(r.Condition)
+	}
+
+	if r.conditionTpl != nil {
+		var buf bytes.Buffer
+		r.conditionTpl.Execute(&buf, ctx)
+		b, _ := strconv.ParseBool(buf.String())
+		return b
+	}
+	return false
 }
 
 func toJSON(data interface{}) (buf *bytes.Buffer, err error) {

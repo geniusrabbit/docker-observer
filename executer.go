@@ -3,26 +3,52 @@
 // @author Dmitry Ponomarev <demdxx@gmail.com> 2017
 //
 
-package main
+package observer
 
 import (
 	"context"
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/swarm"
 	log "github.com/sirupsen/logrus"
 )
-
-type containerPair struct {
-	route         Route
-	containers    []types.ContainerJSON
-	allContainers []types.ContainerJSON
-}
 
 type dockerExecuter struct {
 	kill    chan bool
 	timeout time.Duration
 	router  Router
+}
+
+// ExecuteMessage contains all processing data
+type ExecuteMessage struct {
+	Action        string                `json:"action"`
+	Scope         string                `json:"scope"`
+	Services      []swarm.Service       `json:"services"`
+	AllServices   []swarm.Service       `json:"all_services"`
+	Containers    []types.ContainerJSON `json:"containers"`
+	AllContainers []types.ContainerJSON `json:"all_containers"`
+	route         Route
+}
+
+func (msg ExecuteMessage) ListBase() (list []interface{}) {
+	for _, it := range msg.Containers {
+		list = append(list, it)
+	}
+	for _, it := range msg.Services {
+		list = append(list, it)
+	}
+	return
+}
+
+func (msg ExecuteMessage) AllListBase() (list []interface{}) {
+	for _, it := range msg.AllContainers {
+		list = append(list, it)
+	}
+	for _, it := range msg.AllServices {
+		list = append(list, it)
+	}
+	return
 }
 
 // NewExecuter object
@@ -35,33 +61,48 @@ func NewExecuter(router Router) ContainerEventer {
 }
 
 // Event processor
-func (e *dockerExecuter) Event(action string, containers, allContainers []types.ContainerJSON) {
+func (e *dockerExecuter) Event(msg *ExecuteMessage) {
 	var (
 		ctx, cancel = context.WithTimeout(context.Background(), e.timeout)
-		eContainers []*containerPair
+		eContainers []*ExecuteMessage
 	)
 
-	if len(containers) < 1 {
-		containers = allContainers
+	if len(msg.Containers) < 1 {
+		msg.Containers = msg.AllContainers
+	}
+	if len(msg.Services) < 1 {
+		msg.Services = msg.AllServices
 	}
 
 	// Collect containers by routes
-	for _, cnt := range containers {
-		if routes := e.router.Routes(action, &cnt); len(routes) > 0 {
+	for _, it := range msg.ListBase() {
+		if routes := e.router.Routes(msg.Action, msg.Scope, it); len(routes) > 0 {
 			for _, route := range routes {
-				var tpr *containerPair
+				var tpr *ExecuteMessage
 				for _, pr := range eContainers {
 					if pr.route == route {
 						tpr = pr
 					}
 				}
+
 				if tpr == nil {
-					tpr = &containerPair{route: route}
+					tpr = &ExecuteMessage{Action: msg.Action, Scope: msg.Scope, route: route}
 					eContainers = append(eContainers, tpr)
 				}
 
-				tpr.containers = append(tpr.containers, cnt)
-				tpr.allContainers = allContainers
+				switch v := it.(type) {
+				case types.ContainerJSON:
+					tpr.Containers = append(tpr.Containers, v)
+				case swarm.Service:
+					tpr.Services = append(tpr.Services, v)
+				}
+
+				if len(msg.AllContainers) > 0 {
+					tpr.AllContainers = msg.AllContainers
+				}
+				if len(msg.AllServices) > 0 {
+					tpr.AllServices = msg.AllServices
+				}
 			} // end for
 		}
 	}
@@ -75,7 +116,7 @@ func (e *dockerExecuter) Event(action string, containers, allContainers []types.
 	}()
 
 	for _, pr := range eContainers {
-		if err := pr.route.Exec(ctx, action, pr.containers, pr.allContainers); err != nil {
+		if err := pr.route.Exec(ctx, pr); err != nil {
 			e.Error(err)
 		}
 	}

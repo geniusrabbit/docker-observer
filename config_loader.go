@@ -3,7 +3,7 @@
 // @author Dmitry Ponomarev <demdxx@gmail.com> 2017
 //
 
-package main
+package observer
 
 import (
 	"bytes"
@@ -26,7 +26,7 @@ type configInterface interface {
 // LoadFile from config
 func LoadFile(cfg configInterface, file string) error {
 	f, err := os.Open(file)
-	if nil != err {
+	if err != nil {
 		return err
 	}
 	defer f.Close()
