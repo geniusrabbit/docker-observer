@@ -70,7 +70,7 @@ func (o *baseObserver) Run() error {
 	o.executer = time.NewTicker(1 * time.Second)
 
 	// Do refresh state at begining
-	o.refreshAll()
+	o.refreshAll("init")
 
 	for {
 		select {
@@ -147,11 +147,16 @@ func (o *baseObserver) Docker() *client.Client {
 	return o.docker
 }
 
-func (o *baseObserver) refreshAll() {
+func (o *baseObserver) refreshAll(action ...string) {
 	if o.goInProcess() {
 		return
 	}
 	defer o.outOfProcess()
+
+	var act = "refresh"
+	if len(action) > 0 {
+		act = action[0]
+	}
 
 	containers, err := o.containerInspectList()
 	{
@@ -161,7 +166,8 @@ func (o *baseObserver) refreshAll() {
 		}
 
 		o.ContainerEventer.Event(&ExecuteMessage{
-			Action:        "refresh",
+			Action:        act,
+			Scope:         "local",
 			AllContainers: containers,
 		})
 	}
@@ -174,7 +180,7 @@ func (o *baseObserver) refreshAll() {
 		}
 
 		o.ContainerEventer.Event(&ExecuteMessage{
-			Action:      "refresh",
+			Action:      act,
 			Scope:       "swarm",
 			AllServices: services,
 		})

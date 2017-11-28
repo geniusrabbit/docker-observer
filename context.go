@@ -20,6 +20,7 @@ type route struct {
 	Scope       string   `json:"scope" yaml:"scope"`
 	Actions     []string `json:"actions" yaml:"actions"`
 	Each        bool     `json:"each" yaml:"each"` // Process container one by one
+	Daemon      bool     `json:"daemon" yaml:"daemon"`
 	Condition   string   `json:"condition" yaml:"condition"`
 	Cmd         string   `json:"cmd,omitempty" yaml:"cmd"`
 	Source      string   `json:"source,omitempty" yaml:"source"`

@@ -52,6 +52,7 @@ func newObserver() (observer.Observer, error) {
 			}
 			route = &observer.CmdRoute{
 				Each:      rt.Each,
+				Daemon:    rt.Daemon,
 				Condition: rt.Condition,
 				Cmd:       rt.Cmd,
 			}

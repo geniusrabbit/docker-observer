@@ -30,6 +30,7 @@ var (
 type CmdRoute struct {
 	Each         bool   `json:"each"` // Do process containers one by one
 	Condition    string `json:"condition"`
+	Daemon       bool   `json:"daemon"`
 	Cmd          string `json:"cmd"`
 	conditionTpl *template.Template
 	tpl          *template.Template
@@ -97,6 +98,11 @@ func (r *CmdRoute) exeCmd(ctx context.Context, data io.Reader, cmd string) (out 
 	_cmd := exec.CommandContext(ctx, "bash", "-c", cmd)
 	if data != nil {
 		_cmd.Stdin = data
+	}
+
+	if r.Daemon {
+		go _cmd.Run()
+		return
 	}
 
 	return _cmd.CombinedOutput()
