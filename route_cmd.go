@@ -39,6 +39,7 @@ type CmdRoute struct {
 // Exec route object
 func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 	var (
+		b       bool
 		err     error
 		buf     *bytes.Buffer
 		data    []byte
@@ -63,7 +64,7 @@ func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 			case swarm.Service:
 				dataCtx["service"] = it
 			}
-			if r.condition(dataCtx) {
+			if b, err = r.condition(dataCtx); b {
 				if buf, err = toJSON(dataCtx); err != nil {
 					break
 				}
@@ -75,7 +76,7 @@ func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 				}
 			}
 		}
-	} else if r.condition(dataCtx) {
+	} else if b, err = r.condition(dataCtx); b {
 		buf, err = toJSON(dataCtx)
 		if data, err = r.exeCmd(ctx, buf, r.prepareCmd(dataCtx)); len(data) > 0 {
 			fmt.Println(string(data))
@@ -121,9 +122,9 @@ func (r *CmdRoute) prepareCmd(data interface{}) string {
 	return buf.String()
 }
 
-func (r *CmdRoute) condition(ctx interface{}) bool {
+func (r *CmdRoute) condition(ctx interface{}) (bool, error) {
 	if r.Condition == "" {
-		return true
+		return true, nil
 	}
 
 	if r.conditionTpl == nil {
@@ -131,12 +132,14 @@ func (r *CmdRoute) condition(ctx interface{}) bool {
 	}
 
 	if r.conditionTpl != nil {
-		var buf bytes.Buffer
-		r.conditionTpl.Execute(&buf, ctx)
+		var (
+			buf bytes.Buffer
+			err = r.conditionTpl.Execute(&buf, ctx)
+		)
 		b, _ := strconv.ParseBool(buf.String())
-		return b
+		return b, err
 	}
-	return false
+	return false, nil
 }
 
 func toJSON(data interface{}) (buf *bytes.Buffer, err error) {

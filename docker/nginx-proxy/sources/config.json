@@ -20,8 +20,8 @@
       "each": true,
       "scope": "swarm",
       "actions": ["init", "start", "update", "unpause", "die", "kill", "stop", "pause", "oom", "destroy"],
-      "condition": "{{ if (and (eq (index .current.Config.Labels \"service.web.enable\") \"true\") (index .current.Config.Labels \"service.web.frontend.auth.basic\")) }}true{{ end }}",
-      "cmd": "echo '{{ index .current.Config.Labels \"service.web.frontend.auth.basic\" }}' > /etc/nginx/vhost.d/.{{ coalesce (index .current.Config.Labels \"service.name\") (index .current.Config.Labels \"com.docker.swarm.service.name\") }}.htpasswd"
+      "condition": "{{ if (and (eq (index .service.Spec.Labels \"service.web.enable\") \"true\") (index .service.Spec.Labels \"service.web.frontend.auth.basic\")) }}true{{ end }}",
+      "cmd": "echo '{{ index .service.Spec.Labels \"service.web.frontend.auth.basic\" }}' > /etc/nginx/vhost.d/.{{ coalesce (index .service.Spec.Labels \"service.name\") (index .service.Spec.Labels \"com.docker.swarm.service.name\") .service.Spec.Name }}.htpasswd"
     },
     {
       "name_pattern": "",

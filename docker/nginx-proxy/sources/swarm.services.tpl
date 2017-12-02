@@ -36,6 +36,8 @@
       proxy_set_header X-Forwarded-Ssl $proxy_x_forwarded_ssl;
       proxy_set_header X-Forwarded-Port $proxy_x_forwarded_port;
 
+      proxy_pass http://{{ $service_name }};
+
       {{ if $basic -}}
       auth_basic           "{{ $basicTitle }}";
       auth_basic_user_file /etc/nginx/vhost.d/.{{ $service_name }}.htpasswd; 
