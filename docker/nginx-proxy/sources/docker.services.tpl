@@ -23,12 +23,12 @@
 
 {{ range $i, $it := .allcontainers -}}
 
-  {{- $labels       := $it.Config.Labels -}}
-  {{- $service_name := coalesce (index $labels "service.name") (index $labels "com.docker.swarm.service.name") -}}
-  {{- $basic        := index $labels "service.web.frontend.auth.basic" -}}
-  {{- $basicTitle   := coalesce (index $labels "service.web.frontend.auth.basic_title") "Administrator’s area" -}}
-  {{- $hostname     := coalesce (index $labels "service.web.frontend.hostname") (printf "%s.localhost" $service_name) -}}
-
+  {{- $labels         := $it.Config.Labels -}}
+  {{- $service_name   := coalesce (index $labels "service.name") (index $labels "com.docker.swarm.service.name") -}}
+  {{- $basic          := index $labels "service.web.frontend.auth.basic" -}}
+  {{- $basicTitle     := coalesce (index $labels "service.web.frontend.auth.basic_title") "Administrator’s area" -}}
+  {{- $hostname       := coalesce (index $labels "service.web.frontend.hostname") (printf "%s.localhost" $service_name) -}}
+  {{- $max_body_size  := index $labels "service.web.frontend.client_max_body_size" -}}
 
   {{- if (eq (index $labels "service.web.enable") "true") -}}
   upstream {{ $service_name }} {
@@ -59,6 +59,10 @@
       proxy_set_header X-Forwarded-Proto $proxy_x_forwarded_proto;
       proxy_set_header X-Forwarded-Ssl $proxy_x_forwarded_ssl;
       proxy_set_header X-Forwarded-Port $proxy_x_forwarded_port;
+
+      {{ if $max_body_size -}}
+      client_max_body_size {{ $max_body_size }};
+      {{- end }}
 
       {{ if $basic -}}
       auth_basic           "{{ $basicTitle }}";

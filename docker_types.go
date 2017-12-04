@@ -33,3 +33,13 @@ type SwarmService struct {
 func (ss SwarmService) Count() int {
 	return len(ss.Tasks)
 }
+
+// LiveCount tasks
+func (ss SwarmService) LiveCount() (count int) {
+	for _, t := range ss.Tasks {
+		if t.Status.State == swarm.TaskStateRunning {
+			count++
+		}
+	}
+	return
+}

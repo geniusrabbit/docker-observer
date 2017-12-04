@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strconv"
 	"text/template"
@@ -100,7 +101,12 @@ func (r *CmdRoute) exeCmd(ctx context.Context, data io.Reader, cmd string) (out 
 	}
 
 	if r.Daemon {
-		go _cmd.Run()
+		go func() {
+			_cmd.Stderr = os.Stderr
+			if err = _cmd.Run(); err != nil {
+				log.WithFields(log.Fields{"type": "background", "cmd": cmd}).Error(err)
+			}
+		}()
 		return
 	}
 
