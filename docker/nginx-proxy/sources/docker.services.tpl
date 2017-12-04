@@ -3,7 +3,7 @@
   {{- $netSett  := .Container.NetworkSettings -}}
   {{- $status   := coalesce .Container.State.Status "down" -}}
   {{- $hostname := index $labels "service.web.backend.hostname" -}}
-  {{- $hostport := $netSett | network_first_hostport -}}
+  {{- $hostport := .Container.FirstPort -}}
   {{- $port     := coalesce (index $labels "service.web.backend.port") .Port -}}
 
   {{- if $hostname -}}

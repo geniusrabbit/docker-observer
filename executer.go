@@ -9,8 +9,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/swarm"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,15 +20,16 @@ type dockerExecuter struct {
 
 // ExecuteMessage contains all processing data
 type ExecuteMessage struct {
-	Action        string                `json:"action"`
-	Scope         string                `json:"scope"`
-	Services      []swarm.Service       `json:"services"`
-	AllServices   []swarm.Service       `json:"all_services"`
-	Containers    []types.ContainerJSON `json:"containers"`
-	AllContainers []types.ContainerJSON `json:"all_containers"`
+	Action        string            `json:"action"`
+	Scope         string            `json:"scope"`
+	Services      []SwarmService    `json:"services"`
+	AllServices   []SwarmService    `json:"all_services"`
+	Containers    []DockerContainer `json:"containers"`
+	AllContainers []DockerContainer `json:"all_containers"`
 	route         Route
 }
 
+// ListBase of affected items
 func (msg ExecuteMessage) ListBase() (list []interface{}) {
 	for _, it := range msg.Containers {
 		list = append(list, it)
@@ -41,6 +40,7 @@ func (msg ExecuteMessage) ListBase() (list []interface{}) {
 	return
 }
 
+// AllListBase of all items
 func (msg ExecuteMessage) AllListBase() (list []interface{}) {
 	for _, it := range msg.AllContainers {
 		list = append(list, it)
@@ -91,9 +91,9 @@ func (e *dockerExecuter) Event(msg *ExecuteMessage) {
 				}
 
 				switch v := it.(type) {
-				case types.ContainerJSON:
+				case DockerContainer:
 					tpr.Containers = append(tpr.Containers, v)
-				case swarm.Service:
+				case SwarmService:
 					tpr.Services = append(tpr.Services, v)
 				}
 

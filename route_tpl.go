@@ -17,8 +17,6 @@ import (
 	"text/template"
 
 	"github.com/demdxx/gocast"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/swarm"
 )
 
 // TplRouter errors
@@ -59,9 +57,9 @@ func (r *TplRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 	if r.Each {
 		for _, it := range msg.ListBase() {
 			switch it.(type) {
-			case types.ContainerJSON:
+			case DockerContainer:
 				dataCtx["container"] = it
-			case swarm.Service:
+			case SwarmService:
 				dataCtx["service"] = it
 			}
 			if data, err = r.prepareTmp(dataCtx); err == nil {
@@ -204,17 +202,9 @@ var tplFuncs = template.FuncMap{
 		}
 		return dict, nil
 	},
-	"network_first_hostport": func(nets types.NetworkSettings) interface{} {
-		for _, binds := range nets.Ports {
-			if len(binds) > 0 {
-				return binds[0].HostPort
-			}
-		}
-		return nil
-	},
 	"is_service": func(it interface{}) bool {
 		switch it.(type) {
-		case swarm.Service, *swarm.Service:
+		case SwarmService, *SwarmService:
 			return true
 		}
 		return false

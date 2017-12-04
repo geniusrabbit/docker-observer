@@ -16,8 +16,6 @@ import (
 	"strconv"
 	"text/template"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/swarm"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -59,9 +57,9 @@ func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 	if r.Each {
 		for _, it := range msg.ListBase() {
 			switch it.(type) {
-			case types.ContainerJSON:
+			case DockerContainer:
 				dataCtx["container"] = it
-			case swarm.Service:
+			case SwarmService:
 				dataCtx["service"] = it
 			}
 			if b, err = r.condition(dataCtx); b {

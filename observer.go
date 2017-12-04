@@ -100,7 +100,7 @@ func (o *baseObserver) Run() error {
 				}
 
 				for _, srv := range services {
-					if srv.ID == msg.Actor.ID {
+					if srv.Service.ID == msg.Actor.ID {
 						o.scriptActionPair(msg, func(pair *ExecuteMessage) {
 							pair.Services = append(pair.Services, srv)
 							pair.AllServices = services
@@ -187,7 +187,7 @@ func (o *baseObserver) refreshAll(action ...string) {
 	}
 }
 
-func (o *baseObserver) containerInspectList() (list []types.ContainerJSON, err error) {
+func (o *baseObserver) containerInspectList() (list []DockerContainer, err error) {
 	var containers []types.Container
 
 	containers, err = o.docker.ContainerList(context.Background(), types.ContainerListOptions{})
@@ -197,15 +197,38 @@ func (o *baseObserver) containerInspectList() (list []types.ContainerJSON, err e
 
 	for _, cnt := range containers {
 		if c, err := o.docker.ContainerInspect(context.Background(), cnt.ID); err == nil {
-			list = append(list, c)
+			list = append(list, DockerContainer(c))
 		}
 	}
 
 	return
 }
 
-func (o *baseObserver) serviceInspectList() ([]swarm.Service, error) {
-	return o.docker.ServiceList(context.Background(), types.ServiceListOptions{})
+func (o *baseObserver) serviceInspectList() (list []SwarmService, err error) {
+	var (
+		services []swarm.Service
+		tasks    []swarm.Task
+	)
+
+	if services, err = o.docker.ServiceList(context.Background(), types.ServiceListOptions{}); err != nil {
+		return
+	}
+
+	if tasks, err = o.docker.TaskList(context.Background(), types.TaskListOptions{}); err != nil {
+		return
+	}
+
+	for _, srv := range services {
+		service := SwarmService{Service: srv}
+		for _, task := range tasks {
+			if task.ServiceID == srv.ID {
+				service.Tasks = append(service.Tasks, task)
+			}
+		}
+		list = append(list, service)
+	}
+
+	return
 }
 
 func (o *baseObserver) scriptActionPair(msg events.Message, f func(pair *ExecuteMessage)) {

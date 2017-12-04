@@ -1,15 +1,16 @@
 {{ define "upstream_server_service" -}}
-  {{- $labels   := .Service.Spec.Labels -}}
-  {{- $network  := .Service.Spec.TaskTemplate.Networks | first -}}
+  {{- $labels   := .Service.Service.Spec.Labels -}}
+  {{- $network  := .Service.Service.Spec.TaskTemplate.Networks | first -}}
   {{- $port     := index $labels "service.web.backend.port" -}}
 
-  server {{ $network.Aliases | first }}{{ if $port }}:{{ $port }}{{ end }};
+  server {{ $network.Aliases | first }}{{ if $port }}:{{ $port }}{{ end }}{{ if eq .Service.Count 0 }} down{{ end }};
 {{- end }}
 
 {{ range $i, $it := .allservices -}}
 
-  {{- $labels       := $it.Spec.Labels -}}
-  {{- $service_name := coalesce (index $labels "service.name") (index $labels "com.docker.swarm.service.name") $it.Spec.Name -}}
+  {{- $srv          := $it.Service -}}
+  {{- $labels       := $srv.Spec.Labels -}}
+  {{- $service_name := coalesce (index $labels "service.name") (index $labels "com.docker.swarm.service.name") $srv.Spec.Name -}}
   {{- $basic        := index $labels "service.web.frontend.auth.basic" -}}
   {{- $basicTitle   := coalesce (index $labels "service.web.frontend.auth.basic_title") "Administrator’s area" -}}
   {{- $hostname     := coalesce (index $labels "service.web.frontend.hostname") (printf "%s.localhost" $service_name) -}}
