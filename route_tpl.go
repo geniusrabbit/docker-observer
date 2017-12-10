@@ -209,4 +209,10 @@ var tplFuncs = template.FuncMap{
 		}
 		return false
 	},
+	"split": func(item interface{}, sep string) []string {
+		if s, _ := item.(string); len(s) > 0 {
+			return strings.Split(s, sep)
+		}
+		return nil
+	},
 }

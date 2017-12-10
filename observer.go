@@ -77,37 +77,10 @@ func (o *baseObserver) Run() error {
 		case msg := <-messages:
 			switch msg.Type {
 			case events.ContainerEventType:
-				containers, err := o.containerInspectList()
-
-				if err != nil {
-					o.ContainerEventer.Error(err)
-				}
-
-				for _, cnt := range containers {
-					if cnt.ID == msg.Actor.ID {
-						o.scriptActionPair(msg, func(pair *ExecuteMessage) {
-							pair.Containers = append(pair.Containers, cnt)
-							pair.AllContainers = containers
-						})
-						break
-					}
-				} // end for
+				o.sendMessageToContainers(msg)
+				o.sendMessageToServices(msg)
 			case events.ServiceEventType:
-				services, err := o.serviceInspectList()
-
-				if err != nil {
-					o.ContainerEventer.Error(err)
-				}
-
-				for _, srv := range services {
-					if srv.Service.ID == msg.Actor.ID {
-						o.scriptActionPair(msg, func(pair *ExecuteMessage) {
-							pair.Services = append(pair.Services, srv)
-							pair.AllServices = services
-						})
-						break
-					}
-				} // end for
+				o.sendMessageToServices(msg)
 			}
 		case err := <-errors:
 			if err != nil {
@@ -185,6 +158,54 @@ func (o *baseObserver) refreshAll(action ...string) {
 			AllServices: services,
 		})
 	}
+}
+
+func (o *baseObserver) sendMessageToContainers(msg events.Message) {
+	containers, err := o.containerInspectList()
+
+	if err != nil {
+		o.ContainerEventer.Error(err)
+	}
+
+	for _, cnt := range containers {
+		if cnt.ID == msg.Actor.ID {
+			o.scriptActionPair(msg, func(pair *ExecuteMessage) {
+				pair.Containers = append(pair.Containers, cnt)
+				pair.AllContainers = containers
+			})
+			break
+		}
+	} // end for
+}
+
+func (o *baseObserver) sendMessageToServices(msg events.Message) {
+	services, err := o.serviceInspectList()
+
+	if err != nil {
+		o.ContainerEventer.Error(err)
+	}
+
+	for _, srv := range services {
+		match := false
+		if msg.Type == events.ContainerEventType {
+			for _, tsk := range srv.Tasks {
+				if tsk.Status.ContainerStatus.ContainerID == msg.Actor.ID {
+					match = true
+					break
+				}
+			}
+		} else if srv.Service.ID == msg.Actor.ID {
+			match = true
+		}
+
+		if match {
+			o.scriptActionPair(msg, func(pair *ExecuteMessage) {
+				pair.Services = append(pair.Services, srv)
+				pair.AllServices = services
+			})
+			break
+		}
+	} // end for
 }
 
 func (o *baseObserver) containerInspectList() (list []DockerContainer, err error) {

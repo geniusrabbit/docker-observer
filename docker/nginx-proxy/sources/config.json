@@ -6,7 +6,7 @@
   "routes": [
     {
       "scope": "swarm",
-      "actions": ["init", "start", "update", "unpause", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "actions": ["init", "refresh", "create", "update", "remove", "start", "pause", "unpause", "stop", "die", "kill", "destroy"],
       "source": "{{ .config.BaseDir }}/swarm.services.tpl",
       "target": "/etc/nginx/vhost.d/services.conf"
     },
@@ -19,14 +19,14 @@
     {
       "each": true,
       "scope": "swarm",
-      "actions": ["init", "start", "update", "unpause", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "actions": ["init", "refresh", "create", "update", "remove", "start", "pause", "unpause", "stop", "die", "kill", "destroy"],
       "condition": "{{ $labales := .service.Service.Spec.Labels }}{{ if (and (eq (index $labales \"service.web.enable\") \"true\") (index $labales \"service.web.frontend.auth.basic\")) }}true{{ end }}",
       "cmd": "{{ $labales := .service.Service.Spec.Labels }}echo '{{ index $labales \"service.web.frontend.auth.basic\" }}' > /etc/nginx/vhost.d/.{{ coalesce (index $labales \"service.name\") (index $labales \"com.docker.swarm.service.name\") .service.Service.Spec.Name }}.htpasswd"
     },
     {
       "name_pattern": "",
       "scope": "swarm",
-      "actions": ["init", "start", "update", "unpause", "die", "kill", "stop", "pause", "oom", "destroy"],
+      "actions": ["init", "refresh", "create", "update", "remove", "start", "pause", "unpause", "stop", "die", "kill", "destroy"],
       "cmd": "{{ .config.BaseDir }}/nginx-reload.sh /etc/nginx/vhost.d/services.conf"
     }
   ]
