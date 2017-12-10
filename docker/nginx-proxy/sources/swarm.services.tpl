@@ -40,7 +40,7 @@
 
   server {
     listen {{ indexor $labels "service.web.frontend.port" "80" }};
-    server_name {{ $hostname }}{{ $aliases | join " " }};
+    server_name {{ $hostname }}{{ join $aliases " " }};
 
     {{ if eq $service_alias "registry" -}}
     # required to avoid HTTP 411: see Issue #1486 (https://github.com/moby/moby/issues/1486)

@@ -215,4 +215,7 @@ var tplFuncs = template.FuncMap{
 		}
 		return nil
 	},
+	"join": func(list []string, sep string) string {
+		return strings.Join(list, sep)
+	},
 }
