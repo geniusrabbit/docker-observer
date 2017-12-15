@@ -39,14 +39,14 @@
   {{ if false }}
   server {
     listen 80;
-    server_name {{ $hostname }}{{ join $aliases " " }};
+    server_name {{ $hostname }} {{ join $aliases " " }};
     return 301 https://$host$request_uri
   }
   {{ end }}
 
   server {
     listen {{ indexor $labels "service.web.frontend.port" "80" }};
-    server_name {{ $hostname }}{{ join $aliases " " }};
+    server_name {{ $hostname }} {{ join $aliases " " }};
 
     {{ if eq $service_name "registry" -}}
     # required to avoid HTTP 411: see Issue #1486 (https://github.com/moby/moby/issues/1486)
