@@ -66,7 +66,7 @@ func (o *baseObserver) Run() error {
 	o.Stop()
 
 	messages, errors := o.docker.Events(context.Background(), types.EventsOptions{})
-	o.ticker = time.NewTicker(10 * time.Second)
+	o.ticker = time.NewTicker(15 * time.Second)
 	o.executer = time.NewTicker(1 * time.Second)
 
 	// Do refresh state at begining

@@ -22,7 +22,7 @@
   {{- if (eq (index $labels "service.web.enable") "true") }}
 
   {{ if gt $it.LiveCount 0 -}}
-  upstream {{ $service_name }} {
+  upstream up_{{ $service_name }} {
     {{ template "upstream_server_service" (dict "Service" $it) }}
   }
   {{- end }}
@@ -76,7 +76,7 @@
       root   /usr/share/nginx/html;
       index  index.html index.htm;
       {{- else -}}
-      proxy_pass http://{{ $service_name }};
+      proxy_pass http://up_{{ $service_name }};
       {{- end }}
 
       {{ if $max_body_size -}}

@@ -10,7 +10,7 @@ function _md5() {
 
 function doreload() {
   echo "Nginx reload config: $1"
-  nginx -s reload
+  nginx -g 'daemon on; master_process on;' -s reload
 }
 
 sum=`_md5 $1`

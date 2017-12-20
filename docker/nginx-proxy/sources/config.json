@@ -14,7 +14,7 @@
       "scope": "swarm",
       "actions": ["init"],
       "daemon": true,
-      "cmd": "nginx -g 'daemon off;'"
+      "cmd": "nginx -g 'daemon on; master_process on;'"
     },
     {
       "each": true,
