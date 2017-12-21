@@ -55,6 +55,7 @@ func newObserver() (observer.Observer, error) {
 				Daemon:    rt.Daemon,
 				Condition: rt.Condition,
 				Cmd:       rt.Cmd,
+				Filter:    rt.Filter,
 			}
 		} else {
 			route = &observer.TplRoute{
@@ -62,6 +63,7 @@ func newObserver() (observer.Observer, error) {
 				Condition: rt.Condition,
 				Source:    rt.Source,
 				Target:    rt.Target,
+				Filter:    rt.Filter,
 			}
 		}
 

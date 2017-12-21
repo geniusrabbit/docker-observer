@@ -25,6 +25,7 @@ type route struct {
 	Cmd         string   `json:"cmd,omitempty" yaml:"cmd"`
 	Source      string   `json:"source,omitempty" yaml:"source"`
 	Target      string   `json:"target,omitempty" yaml:"target"`
+	Filter      filter   `json:"filter" yaml:"filter"`
 }
 
 type config struct {

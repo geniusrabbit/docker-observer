@@ -14,7 +14,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strconv"
 	"text/template"
 
 	log "github.com/sirupsen/logrus"
@@ -31,15 +30,15 @@ type CmdRoute struct {
 	Condition    string `json:"condition"`
 	Daemon       bool   `json:"daemon"`
 	Cmd          string `json:"cmd"`
+	Filter       filter `json:"filter"`
 	conditionTpl *template.Template
 	tpl          *template.Template
 }
 
 // Exec route object
-func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
+func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) (err error) {
 	var (
 		b       bool
-		err     error
 		buf     *bytes.Buffer
 		data    []byte
 		dataCtx = map[string]interface{}{
@@ -54,6 +53,10 @@ func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 			"config":        &Config,
 		}
 	)
+
+	if err = r.Filter.do(msg); err != nil {
+		return
+	}
 
 	if r.Each {
 		for _, it := range msg.ListBase() {
@@ -70,9 +73,9 @@ func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 				if data, err = r.exeCmd(ctx, buf, r.prepareCmd(dataCtx)); len(data) > 0 {
 					fmt.Println(string(data))
 				}
-				if err != nil {
-					break
-				}
+			}
+			if err != nil {
+				break
 			}
 		}
 	} else if b, err = r.condition(dataCtx); b {
@@ -81,7 +84,7 @@ func (r *CmdRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 			fmt.Println(string(data))
 		}
 	}
-	return err
+	return
 }
 
 // Validate route data
@@ -126,24 +129,20 @@ func (r *CmdRoute) prepareCmd(data interface{}) string {
 	return buf.String()
 }
 
-func (r *CmdRoute) condition(ctx interface{}) (bool, error) {
+func (r *CmdRoute) condition(ctx interface{}) (_ bool, err error) {
 	if r.Condition == "" {
 		return true, nil
 	}
 
 	if r.conditionTpl == nil {
-		r.conditionTpl, _ = template.New("cond").Funcs(tplFuncs).Parse(r.Condition)
+		r.conditionTpl, err = template.New("cond").Funcs(tplFuncs).Parse(r.Condition)
 	}
 
-	if r.conditionTpl != nil {
-		var (
-			buf bytes.Buffer
-			err = r.conditionTpl.Execute(&buf, ctx)
-		)
-		b, _ := strconv.ParseBool(buf.String())
-		return b, err
+	if err != nil {
+		return
 	}
-	return false, nil
+
+	return doTemplateCondition(r.conditionTpl, ctx)
 }
 
 func toJSON(data interface{}) (buf *bytes.Buffer, err error) {

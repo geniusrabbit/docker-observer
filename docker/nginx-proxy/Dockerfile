@@ -3,7 +3,7 @@ FROM nginx
 LABEL maintainer="GeniusRabbit Dmitry Ponomarev: Load balancer"
 LABEL service.role="balancer"
 
-VOLUME ["/etc/nginx/certs", "/etc/nginx/dhparam", "/etc/nginx/vhost.d"]
+VOLUME ["/etc/nginx/certs", "/etc/nginx/dhparam", "/etc/nginx/vhost.d", "/app/sources"]
 
 EXPOSE 80 443
 

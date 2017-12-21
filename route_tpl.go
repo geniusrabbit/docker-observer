@@ -12,7 +12,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"reflect"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -31,15 +30,16 @@ type TplRoute struct {
 	Condition    string `json:"condition"`
 	Source       string `json:"source"`
 	Target       string `json:"target"`
+	Filter       filter `json:"filter"`
 	conditionTpl *template.Template
 	sourceTpl    *template.Template
 	targetTpl    *template.Template
 }
 
 // Exec route object
-func (r *TplRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
+func (r *TplRoute) Exec(ctx context.Context, msg *ExecuteMessage) (err error) {
 	var (
-		err     error
+		b       bool
 		data    []byte
 		dataCtx = map[string]interface{}{
 			"message":       msg,
@@ -54,6 +54,10 @@ func (r *TplRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 		}
 	)
 
+	if err = r.Filter.do(msg); err != nil {
+		return
+	}
+
 	if r.Each {
 		for _, it := range msg.ListBase() {
 			switch it.(type) {
@@ -62,14 +66,21 @@ func (r *TplRoute) Exec(ctx context.Context, msg *ExecuteMessage) error {
 			case SwarmService:
 				dataCtx["service"] = it
 			}
-			if data, err = r.prepareTmp(dataCtx); err == nil {
-				err = ioutil.WriteFile(r.target(dataCtx), data, 0666)
+			if b, err = r.condition(dataCtx); b {
+				if data, err = r.prepareTmp(dataCtx); err == nil {
+					err = ioutil.WriteFile(r.target(dataCtx), data, 0666)
+				}
+			}
+			if err != nil {
+				break
 			}
 		}
-	} else if data, err = r.prepareTmp(dataCtx); err == nil {
-		err = ioutil.WriteFile(r.target(dataCtx), data, 0666)
+	} else if b, err = r.condition(dataCtx); b {
+		if data, err = r.prepareTmp(dataCtx); err == nil {
+			err = ioutil.WriteFile(r.target(dataCtx), data, 0666)
+		}
 	}
-	return err
+	return
 }
 
 // Validate route data
@@ -126,22 +137,20 @@ func (r *TplRoute) target(ctx interface{}) string {
 	return r.Target
 }
 
-func (r *TplRoute) condition(ctx interface{}) bool {
+func (r *TplRoute) condition(ctx interface{}) (_ bool, err error) {
 	if r.Condition == "" {
-		return true
+		return true, nil
 	}
 
 	if r.conditionTpl == nil {
-		r.conditionTpl, _ = template.New("cond").Funcs(tplFuncs).Parse(r.Condition)
+		r.conditionTpl, err = template.New("cond").Funcs(tplFuncs).Parse(r.Condition)
 	}
 
-	if r.conditionTpl != nil {
-		var buf bytes.Buffer
-		r.conditionTpl.Execute(&buf, ctx)
-		b, _ := strconv.ParseBool(buf.String())
-		return b
+	if err != nil {
+		return
 	}
-	return false
+
+	return doTemplateCondition(r.conditionTpl, ctx)
 }
 
 var tplFuncs = template.FuncMap{
